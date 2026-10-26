@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -25,11 +28,39 @@ type Server struct {
 	botEngine   *BotEngine
 }
 
+func getAdminCredentials() (string, string, string) {
+	user := os.Getenv("ADMIN_USER")
+	if user == "" {
+		user = "administrador"
+	}
+	pass := os.Getenv("ADMIN_PASS")
+	if pass == "" {
+		pass = "ceep@pi"
+	}
+	sum := sha256.Sum256([]byte("whatzbot-guard:" + strings.ToLower(user) + ":" + pass))
+	return user, pass, hex.EncodeToString(sum[:])
+}
+
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, _, expectedToken := getAdminCredentials()
+		token := strings.TrimSpace(r.Header.Get("X-Admin-Token"))
+		if token == "" {
+			token = strings.TrimSpace(r.URL.Query().Get("token"))
+		}
+		if subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) != 1 {
+			writeError(w, http.StatusUnauthorized, "Acesso negado. Faça login como administrador.")
+			return
+		}
+		next(w, r)
+	}
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, apikey, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, apikey, Authorization, X-Admin-Token")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -79,12 +110,13 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Endpoints da API
-	mux.HandleFunc("/api/state", s.handleGetState)
-	mux.HandleFunc("/api/config", s.handleConfig)
-	mux.HandleFunc("/api/ollama/models", s.handleOllamaModels)
-	mux.HandleFunc("/api/instances", s.handleInstances)
-	mux.HandleFunc("/api/instances/", s.handleInstanceSubRoutes)
-	mux.HandleFunc("/api/logs", s.handleLogs)
+	mux.HandleFunc("/api/login", s.handleLogin)
+	mux.HandleFunc("/api/state", requireAuth(s.handleGetState))
+	mux.HandleFunc("/api/config", requireAuth(s.handleConfig))
+	mux.HandleFunc("/api/ollama/models", requireAuth(s.handleOllamaModels))
+	mux.HandleFunc("/api/instances", requireAuth(s.handleInstances))
+	mux.HandleFunc("/api/instances/", requireAuth(s.handleInstanceSubRoutes))
+	mux.HandleFunc("/api/logs", requireAuth(s.handleLogs))
 	mux.HandleFunc("/api/webhook/evolution", s.handleWebhook)
 	mux.HandleFunc("/api/ws", s.handleWebSocket)
 
@@ -157,6 +189,40 @@ func (s *Server) restoreActiveBots() {
 			_ = s.botEngine.Toggle(name)
 		}
 	}
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Método não permitido")
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "JSON inválido")
+		return
+	}
+
+	adminUser, adminPass, token := getAdminCredentials()
+	inputUser := strings.ToLower(strings.TrimSpace(req.Username))
+	expectedUser := strings.ToLower(strings.TrimSpace(adminUser))
+
+	userOK := subtle.ConstantTimeCompare([]byte(inputUser), []byte(expectedUser)) == 1
+	passOK := subtle.ConstantTimeCompare([]byte(req.Password), []byte(adminPass)) == 1
+
+	if !userOK || !passOK {
+		writeError(w, http.StatusUnauthorized, "Usuário ou senha incorretos")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"token": token,
+		"user":  adminUser,
+	})
 }
 
 func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {

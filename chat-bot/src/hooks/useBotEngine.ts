@@ -17,8 +17,14 @@ export function useBotEngine(
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     function connect() {
+      const token = api.getAuthToken();
+      if (!token) {
+        reconnectTimeout = setTimeout(connect, 2000);
+        return;
+      }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+      const wsUrl = `${protocol}//${window.location.host}/api/ws?token=${encodeURIComponent(token)}`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -58,12 +64,13 @@ export function useBotEngine(
 
   // Atualiza estado do bot
   const syncState = useCallback(async () => {
+    if (!api.getAuthToken()) return;
     try {
       const state = await api.fetchState();
       setActiveBots(state.activeBots || {});
       setQueueLength(state.queueLength || 0);
     } catch {
-      // Backend pode estar iniciando
+      // Backend pode estar iniciando ou aguardando login
     }
   }, []);
 

@@ -3,13 +3,44 @@
 import type { InstanceInfo, QRCodeData, ServerConfig, BackendState } from './types';
 
 const API_BASE = '/api';
+const AUTH_TOKEN_KEY = 'whatz_admin_token';
+
+export function getAuthToken(): string {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setAuthToken(token: string): void {
+  try {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearAuthToken(): void {
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['X-Admin-Token'] = token;
+  }
+
   const r = await fetch(API_BASE + path, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
@@ -25,9 +56,28 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
     const msg =
       (err && ((err.error as string) || (err.message as string))) ||
       'Erro HTTP ' + r.status;
+    if (r.status === 401 && path !== '/login') {
+      clearAuthToken();
+      window.dispatchEvent(new Event('whatz:unauthorized'));
+    }
     throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
   }
   return d as T;
+}
+
+export async function login(
+  username: string,
+  password: string
+): Promise<{ ok: boolean; token: string; user: string }> {
+  const res = await request<{ ok: boolean; token: string; user: string }>(
+    '/login',
+    'POST',
+    { username, password }
+  );
+  if (res.token) {
+    setAuthToken(res.token);
+  }
+  return res;
 }
 
 export async function fetchState(): Promise<BackendState> {

@@ -1,8 +1,9 @@
-// ── Main App — Cozy 16-bit Pixel Art Nature Layout ──
+// ── Main App — Cozy 16-bit Pixel Art Nature Layout with Admin Auth Gate ──
 
 import { useState, useCallback, useEffect } from 'react';
 import { Toast } from './components/Toast';
 import { Header } from './components/Header';
+import { LoginScreen } from './components/LoginScreen';
 import { SettingsModal, type SettingsTab } from './components/SettingsModal';
 import { DeviceGrid } from './components/DeviceGrid';
 import { DeviceDetail } from './components/DeviceDetail';
@@ -15,6 +16,19 @@ import type { InstanceInfo, QRCodeData, LogEntry, ServerConfig } from './types';
 
 export default function App() {
   const { message, type, toast, dismiss } = useToast();
+
+  // ── Admin Authentication ──
+  const [authenticated, setAuthenticated] = useState<boolean>(() =>
+    Boolean(api.getAuthToken())
+  );
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setAuthenticated(false);
+    };
+    window.addEventListener('whatz:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('whatz:unauthorized', handleUnauthorized);
+  }, []);
 
   // ── Instances ──
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
@@ -72,8 +86,9 @@ export default function App() {
     return infos;
   }, []);
 
-  // ── Initial state sync with Go backend ──
+  // ── Initial state sync with Go backend (only when authenticated) ──
   useEffect(() => {
+    if (!authenticated) return;
     api.fetchState()
       .then((state) => {
         if (state.config) {
@@ -105,7 +120,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [loadInstances, botEngine.setActiveBots]);
+  }, [authenticated, loadInstances, botEngine.setActiveBots]);
 
   const handleConnect = useCallback(async (url: string, key: string) => {
     try {
@@ -149,7 +164,7 @@ export default function App() {
     }
   }, [toast]);
 
-  const handleLogout = useCallback(async (name: string) => {
+  const handleLogoutInstance = useCallback(async (name: string) => {
     try {
       await api.logoutInstance(name);
       toast('Desconectada.', 'ok');
@@ -188,6 +203,20 @@ export default function App() {
 
   const selectedInfo = instances.find((i) => i.name === selectedInstance);
 
+  if (!authenticated) {
+    return (
+      <>
+        <Toast message={message} type={type} onDismiss={dismiss} />
+        <LoginScreen
+          onLoginSuccess={() => {
+            setAuthenticated(true);
+            toast('Bem-vindo ao Santuário, Administrador!', 'ok');
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen forest-bg-pattern text-dark-text">
       <Toast message={message} type={type} onDismiss={dismiss} />
@@ -198,6 +227,11 @@ export default function App() {
         audioEnabled={audioEnabled}
         whisperModel={whisperModel}
         onOpenSettings={handleOpenSettings}
+        onLogout={() => {
+          api.clearAuthToken();
+          setAuthenticated(false);
+          toast('Sessão encerrada.', 'ok');
+        }}
       />
 
       <DeviceGrid
@@ -221,7 +255,7 @@ export default function App() {
             await loadInstances();
           }}
           onConnectQR={handleConnectQR}
-          onLogout={handleLogout}
+          onLogout={handleLogoutInstance}
           onDelete={handleDelete}
           botEngine={wrappedBotEngine}
         />

@@ -1,6 +1,6 @@
-// ── Pixel Art Nature Header with Quick Status Badges & Settings Trigger ──
+// ── Pixel Art Nature Header with Quick Status Badges, Settings & Logout ──
 
-import { Settings, Bot, Mic } from 'lucide-react';
+import { Settings, Bot, Mic, LogOut } from 'lucide-react';
 import type { SettingsTab } from './SettingsModal';
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   audioEnabled: boolean;
   whisperModel: string;
   onOpenSettings: (tab?: SettingsTab) => void;
+  onLogout: () => void;
 }
 
 export function Header({
@@ -17,6 +18,7 @@ export function Header({
   audioEnabled,
   whisperModel,
   onOpenSettings,
+  onLogout,
 }: Props) {
   return (
     <header className="relative border-b-2 border-dark-border bg-dark-card sticky top-0 z-40 overflow-hidden shadow-lg">
@@ -126,6 +128,17 @@ export function Header({
           >
             <Settings className="w-4 h-4" />
             <span>⚙️ Configurações</span>
+          </button>
+
+          {/* Logout Button */}
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Sair do painel"
+            className="pixel-btn px-3 py-2 bg-dark-input-bg hover:border-red-500/50 text-dark-muted hover:text-red-300 font-pixel text-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
       </div>
