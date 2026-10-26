@@ -483,7 +483,7 @@ export function SettingsModal({
                   type="url"
                   value={whisperUrl}
                   onChange={(e) => setWhisperUrl(e.target.value)}
-                  placeholder="http://100.x.x.x:9000"
+                  placeholder="http://100.95.97.25:8000"
                   disabled={!audioEnabled}
                   className="w-full px-3.5 py-2.5 pixel-input text-sm text-dark-text disabled:opacity-50"
                 />
@@ -503,6 +503,9 @@ export function SettingsModal({
                   disabled={!audioEnabled}
                   className="w-full px-3.5 py-2.5 pixel-input text-sm text-dark-text disabled:opacity-50"
                 >
+                  <option value="whisper-1">
+                    whisper-1 (Padrão OpenAI / Faster-Whisper)
+                  </option>
                   <option value="base">
                     Whisper Base (Mais rápido • Ideal p/ CPU Ryzen 5)
                   </option>

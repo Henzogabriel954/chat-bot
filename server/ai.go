@@ -18,7 +18,8 @@ type ChatMessage struct {
 }
 
 type AIService struct {
-	client *http.Client
+	client     *http.Client
+	fastClient *http.Client
 }
 
 func NewAIService() *AIService {
@@ -26,15 +27,38 @@ func NewAIService() *AIService {
 		client: &http.Client{
 			Timeout: 120 * time.Second, // IA pode demorar alguns segundos em respostas longas
 		},
+		fastClient: &http.Client{
+			Timeout: 8 * time.Second, // Timeout rápido para listagem de modelos (/api/tags) evitando Cloudflare 502
+		},
 	}
+}
+
+func normalizeOllamaURL(raw string) string {
+	u := strings.TrimSpace(strings.TrimRight(raw, "/"))
+	for _, suffix := range []string{"/api/chat", "/api/tags", "/v1/chat/completions", "/v1"} {
+		if strings.HasSuffix(strings.ToLower(u), suffix) {
+			u = strings.TrimRight(u[:len(u)-len(suffix)], "/")
+		}
+	}
+	return u
+}
+
+func normalizeWhisperURL(raw string) string {
+	u := strings.TrimSpace(strings.TrimRight(raw, "/"))
+	for _, suffix := range []string{"/v1/audio/transcriptions", "/api/transcribe", "/api/voice-chat", "/transcribe", "/v1"} {
+		if strings.HasSuffix(strings.ToLower(u), suffix) {
+			u = strings.TrimRight(u[:len(u)-len(suffix)], "/")
+		}
+	}
+	return u
 }
 
 // Lista modelos disponíveis no Ollama
 func (a *AIService) FetchOllamaModels(ollamaURL string) ([]string, error) {
-	ollamaURL = strings.TrimRight(ollamaURL, "/")
-	resp, err := a.client.Get(ollamaURL + "/api/tags")
+	ollamaURL = normalizeOllamaURL(ollamaURL)
+	resp, err := a.fastClient.Get(ollamaURL + "/api/tags")
 	if err != nil {
-		return nil, fmt.Errorf("não consegui conectar ao Ollama em %s: %w", ollamaURL, err)
+		return nil, fmt.Errorf("não consegui conectar ao Ollama em %s (verifique o IP Tailscale): %w", ollamaURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -61,7 +85,7 @@ func (a *AIService) FetchOllamaModels(ollamaURL string) ([]string, error) {
 
 // Envia histórico para o Ollama e obtém a resposta da IA
 func (a *AIService) AskOllama(ollamaURL, model, sysPrompt string, history []ChatMessage) (string, error) {
-	ollamaURL = strings.TrimRight(ollamaURL, "/")
+	ollamaURL = normalizeOllamaURL(ollamaURL)
 
 	messages := make([]ChatMessage, 0, len(history)+1)
 	if sysPrompt != "" {
@@ -119,11 +143,11 @@ func (a *AIService) AskOllama(ollamaURL, model, sysPrompt string, history []Chat
 	return text, nil
 }
 
-// Envia áudio para o servidor Whisper no PC da IA e obtém a transcrição
+// Envia áudio para o servidor Faster-Whisper no PC da IA e obtém a transcrição
 func (a *AIService) TranscribeAudio(whisperURL, whisperModel, base64Audio string) (string, error) {
-	whisperURL = strings.TrimRight(whisperURL, "/")
+	whisperURL = normalizeWhisperURL(whisperURL)
 	if whisperModel == "" {
-		whisperModel = "base"
+		whisperModel = "whisper-1"
 	}
 
 	// Remove cabeçalho data:... se existir
@@ -136,36 +160,69 @@ func (a *AIService) TranscribeAudio(whisperURL, whisperModel, base64Audio string
 		return "", fmt.Errorf("áudio base64 inválido: %w", err)
 	}
 
-	// 1. Tenta padrão OpenAI (/v1/audio/transcriptions) multipart
-	var b bytes.Buffer
-	w := multipart.NewWriter(&b)
+	// Helper para enviar multipart/form-data para um endpoint específico
+	tryMultipart := func(endpoint string, includeModel bool) (string, error) {
+		var b bytes.Buffer
+		w := multipart.NewWriter(&b)
 
-	part, err := w.CreateFormFile("file", "audio.ogg")
-	if err == nil {
-		_, _ = part.Write(audioBytes)
-		_ = w.WriteField("model", whisperModel)
-		_ = w.WriteField("language", "pt")
+		part, err := w.CreateFormFile("file", "audio.ogg")
+		if err != nil {
+			return "", err
+		}
+		if _, err := part.Write(audioBytes); err != nil {
+			return "", err
+		}
+		if includeModel {
+			_ = w.WriteField("model", whisperModel)
+			_ = w.WriteField("language", "pt")
+		}
 		_ = w.Close()
 
-		req, err := http.NewRequest("POST", whisperURL+"/v1/audio/transcriptions", &b)
-		if err == nil {
-			req.Header.Set("Content-Type", w.FormDataContentType())
-			resp, err := a.client.Do(req)
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					var res struct {
-						Text string `json:"text"`
-					}
-					if err := json.NewDecoder(resp.Body).Decode(&res); err == nil {
-						return strings.TrimSpace(res.Text), nil
-					}
-				}
-			}
+		req, err := http.NewRequest("POST", whisperURL+endpoint, &b)
+		if err != nil {
+			return "", err
 		}
+		req.Header.Set("Content-Type", w.FormDataContentType())
+
+		resp, err := a.client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		}
+
+		var res struct {
+			Text          string `json:"text"`
+			Transcription string `json:"transcription"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return "", err
+		}
+		out := strings.TrimSpace(res.Text)
+		if out == "" {
+			out = strings.TrimSpace(res.Transcription)
+		}
+		if out == "" {
+			return "", fmt.Errorf("transcrição vazia")
+		}
+		return out, nil
 	}
 
-	// 2. Se falhar, tenta endpoint direto /transcribe com JSON
+	// 1. Tenta padrão OpenAI (/v1/audio/transcriptions) conforme Guia de Integração
+	if text, err := tryMultipart("/v1/audio/transcriptions", true); err == nil && text != "" {
+		return text, nil
+	}
+
+	// 2. Tenta endpoint nativo (/api/transcribe) conforme Guia de Integração
+	if text, err := tryMultipart("/api/transcribe", false); err == nil && text != "" {
+		return text, nil
+	}
+
+	// 3. Fallback legado (/transcribe com JSON)
 	payload := map[string]string{
 		"base64":   base64Audio,
 		"language": "pt",

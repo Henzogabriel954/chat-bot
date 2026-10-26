@@ -42,12 +42,12 @@ export default function App() {
     store.get('evo_url') || 'http://p2.hcraft.online:8102'
   );
   const [evolutionApiKey, setEvolutionApiKey] = useState(store.get('evo_key') || '');
-  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
-  const [models, setModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState('');
+  const [ollamaUrl, setOllamaUrl] = useState('http://100.95.97.25:11434');
+  const [models, setModels] = useState<string[]>(['llama3.1:8b']);
+  const [selectedModel, setSelectedModel] = useState('llama3.1:8b');
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [whisperUrl, setWhisperUrl] = useState('http://localhost:9000');
-  const [whisperModel, setWhisperModel] = useState('base');
+  const [whisperUrl, setWhisperUrl] = useState('http://100.95.97.25:8000');
+  const [whisperModel, setWhisperModel] = useState('whisper-1');
 
   // ── Settings Modal state ──
   const [settingsOpen, setSettingsOpen] = useState(false);
