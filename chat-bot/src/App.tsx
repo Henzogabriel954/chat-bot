@@ -1,16 +1,17 @@
-// ── Main App — minimalist layout ──
+// ── Main App — Cozy 16-bit Pixel Art Nature Layout ──
 
 import { useState, useCallback, useEffect } from 'react';
 import { Toast } from './components/Toast';
 import { Header } from './components/Header';
-import { OllamaBar } from './components/OllamaBar';
+import { SettingsModal, type SettingsTab } from './components/SettingsModal';
 import { DeviceGrid } from './components/DeviceGrid';
 import { DeviceDetail } from './components/DeviceDetail';
 import { LogPanel } from './components/LogPanel';
 import { useToast } from './hooks/useToast';
 import { useBotEngine } from './hooks/useBotEngine';
+import { store } from './utils';
 import * as api from './api';
-import type { InstanceInfo, QRCodeData, LogEntry } from './types';
+import type { InstanceInfo, QRCodeData, LogEntry, ServerConfig } from './types';
 
 export default function App() {
   const { message, type, toast, dismiss } = useToast();
@@ -20,14 +21,28 @@ export default function App() {
   const [instanceNames, setInstanceNames] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+  const [instanceConfigs, setInstanceConfigs] = useState<ServerConfig['instances']>({});
 
-  // ── Ollama & Whisper state ──
+  // ── Evolution API, Ollama & Whisper state ──
+  const [evolutionUrl, setEvolutionUrl] = useState(
+    store.get('evo_url') || 'http://p2.hcraft.online:8102'
+  );
+  const [evolutionApiKey, setEvolutionApiKey] = useState(store.get('evo_key') || '');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [whisperUrl, setWhisperUrl] = useState('http://localhost:9000');
   const [whisperModel, setWhisperModel] = useState('base');
+
+  // ── Settings Modal state ──
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [initialSettingsTab, setInitialSettingsTab] = useState<SettingsTab>('evolution');
+
+  const handleOpenSettings = useCallback((tab: SettingsTab = 'evolution') => {
+    setInitialSettingsTab(tab);
+    setSettingsOpen(true);
+  }, []);
 
   // ── Bot engine & logs ──
   const [, forceUpdate] = useState(0);
@@ -62,11 +77,20 @@ export default function App() {
     api.fetchState()
       .then((state) => {
         if (state.config) {
+          if (state.config.evolutionUrl) {
+            setEvolutionUrl(state.config.evolutionUrl);
+            store.set('evo_url', state.config.evolutionUrl);
+          }
+          if (state.config.evolutionApiKey) {
+            setEvolutionApiKey(state.config.evolutionApiKey);
+            store.set('evo_key', state.config.evolutionApiKey);
+          }
           if (state.config.ollamaUrl) setOllamaUrl(state.config.ollamaUrl);
           if (state.config.ollamaModel) setSelectedModel(state.config.ollamaModel);
           if (state.config.audioEnabled !== undefined) setAudioEnabled(state.config.audioEnabled);
           if (state.config.whisperUrl) setWhisperUrl(state.config.whisperUrl);
           if (state.config.whisperModel) setWhisperModel(state.config.whisperModel);
+          if (state.config.instances) setInstanceConfigs(state.config.instances);
         }
         if (state.logs && state.logs.length > 0) {
           setLogs(state.logs);
@@ -92,9 +116,12 @@ export default function App() {
     } catch (e) {
       const msg = (e as Error).message;
       setConnected(false);
-      toast(msg === 'Failed to fetch'
-        ? 'Não consegui acessar a API. Confira a URL e a porta.'
-        : msg, 'err');
+      toast(
+        msg === 'Failed to fetch'
+          ? 'Não consegui acessar a API. Confira a URL e a porta.'
+          : msg,
+        'err'
+      );
     }
   }, [loadInstances, toast]);
 
@@ -102,8 +129,10 @@ export default function App() {
     try {
       await api.createInstance(name);
       await loadInstances();
-      toast(`"${name}" criada!`, 'ok');
-    } catch (e) { toast((e as Error).message, 'err'); }
+      toast(`"${name}" criada na floresta!`, 'ok');
+    } catch (e) {
+      toast((e as Error).message, 'err');
+    }
   }, [loadInstances, toast]);
 
   const handleConnectQR = useCallback(async (name: string): Promise<QRCodeData | null> => {
@@ -114,7 +143,10 @@ export default function App() {
         return null;
       }
       return d;
-    } catch (e) { toast((e as Error).message, 'err'); return null; }
+    } catch (e) {
+      toast((e as Error).message, 'err');
+      return null;
+    }
   }, [toast]);
 
   const handleLogout = useCallback(async (name: string) => {
@@ -122,16 +154,20 @@ export default function App() {
       await api.logoutInstance(name);
       toast('Desconectada.', 'ok');
       await loadInstances();
-    } catch (e) { toast((e as Error).message, 'err'); }
+    } catch (e) {
+      toast((e as Error).message, 'err');
+    }
   }, [loadInstances, toast]);
 
   const handleDelete = useCallback(async (name: string) => {
     try {
       await api.deleteInstance(name);
-      toast('Excluída.', 'ok');
+      toast('Instância excluída.', 'ok');
       setSelectedInstance(null);
       await loadInstances();
-    } catch (e) { toast((e as Error).message, 'err'); }
+    } catch (e) {
+      toast((e as Error).message, 'err');
+    }
   }, [loadInstances, toast]);
 
   const handleSelectDevice = useCallback((name: string) => {
@@ -153,10 +189,54 @@ export default function App() {
   const selectedInfo = instances.find((i) => i.name === selectedInstance);
 
   return (
-    <div className="min-h-screen bg-dark-bg">
+    <div className="min-h-screen forest-bg-pattern text-dark-text">
       <Toast message={message} type={type} onDismiss={dismiss} />
-      <Header connected={connected} onConnect={handleConnect} />
-      <OllamaBar
+
+      <Header
+        connected={connected}
+        selectedModel={selectedModel}
+        audioEnabled={audioEnabled}
+        whisperModel={whisperModel}
+        onOpenSettings={handleOpenSettings}
+      />
+
+      <DeviceGrid
+        instanceNames={instanceNames}
+        selectedInstance={selectedInstance}
+        isBotActive={isBotActive}
+        onSelect={handleSelectDevice}
+        onCreateInstance={handleCreateInstance}
+        onOpenSettings={() => handleOpenSettings('evolution')}
+        onToast={toast}
+      />
+
+      {selectedInfo && (
+        <DeviceDetail
+          key={selectedInfo.name}
+          instance={selectedInfo}
+          initialBotConfig={instanceConfigs?.[selectedInfo.name]}
+          onClose={() => setSelectedInstance(null)}
+          onToast={toast}
+          onRefresh={async () => {
+            await loadInstances();
+          }}
+          onConnectQR={handleConnectQR}
+          onLogout={handleLogout}
+          onDelete={handleDelete}
+          botEngine={wrappedBotEngine}
+        />
+      )}
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        initialTab={initialSettingsTab}
+        connected={connected}
+        evolutionUrl={evolutionUrl}
+        setEvolutionUrl={setEvolutionUrl}
+        evolutionApiKey={evolutionApiKey}
+        setEvolutionApiKey={setEvolutionApiKey}
+        onConnect={handleConnect}
         ollamaUrl={ollamaUrl}
         setOllamaUrl={setOllamaUrl}
         selectedModel={selectedModel}
@@ -171,28 +251,6 @@ export default function App() {
         setWhisperModel={setWhisperModel}
         onToast={toast}
       />
-      <DeviceGrid
-        instanceNames={instanceNames}
-        selectedInstance={selectedInstance}
-        isBotActive={isBotActive}
-        onSelect={handleSelectDevice}
-        onCreateInstance={handleCreateInstance}
-        onToast={toast}
-      />
-
-      {selectedInfo && (
-        <DeviceDetail
-          key={selectedInfo.name}
-          instance={selectedInfo}
-          onClose={() => setSelectedInstance(null)}
-          onToast={toast}
-          onRefresh={async () => { await loadInstances(); }}
-          onConnectQR={handleConnectQR}
-          onLogout={handleLogout}
-          onDelete={handleDelete}
-          botEngine={wrappedBotEngine}
-        />
-      )}
 
       <LogPanel logs={logs} onClear={clearLogs} />
     </div>

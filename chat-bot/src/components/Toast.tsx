@@ -1,4 +1,4 @@
-// ── Toast notification component ──
+// ── Toast notification component (Pixel Art Nature style) ──
 
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import type { ToastType } from '../types';
@@ -15,21 +15,22 @@ export function Toast({ message, type, onDismiss }: Props) {
   return (
     <div className="fixed top-4 right-4 z-50 animate-slide-in max-w-md">
       <div
-        className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-sm border ${
+        className={`pixel-card flex items-center gap-3 px-4 py-3 ${
           type === 'ok'
-            ? 'bg-emerald-600/95 border-emerald-500/50 text-white'
-            : 'bg-red-600/95 border-red-500/50 text-white'
+            ? 'bg-dark-card border-dark-accent text-dark-text'
+            : 'bg-wood-bg border-dark-danger text-dark-text'
         }`}
       >
         {type === 'ok' ? (
-          <CheckCircle className="w-5 h-5 shrink-0" />
+          <CheckCircle className="w-5 h-5 text-dark-accent shrink-0" />
         ) : (
-          <AlertCircle className="w-5 h-5 shrink-0" />
+          <AlertCircle className="w-5 h-5 text-dark-danger shrink-0" />
         )}
-        <span className="text-sm font-medium flex-1">{message}</span>
+        <span className="text-xs font-pixel flex-1 leading-relaxed">{message}</span>
         <button
+          type="button"
           onClick={onDismiss}
-          className="p-1 rounded-lg hover:bg-white/20 transition-colors"
+          className="p-1 text-dark-muted hover:text-dark-text transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>

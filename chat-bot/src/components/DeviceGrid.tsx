@@ -1,6 +1,6 @@
-// ── Device grid: all instances as phone icons + add button ──
+// ── Device grid: all instances as 16-bit totems + section header + empty state ──
 
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { DeviceCard } from './DeviceCard';
 
@@ -10,6 +10,7 @@ interface Props {
   isBotActive: (name: string) => boolean;
   onSelect: (name: string) => void;
   onCreateInstance: (name: string) => Promise<void>;
+  onOpenSettings: () => void;
   onToast: (msg: string, type: 'ok' | 'err') => void;
 }
 
@@ -19,11 +20,14 @@ export function DeviceGrid({
   isBotActive,
   onSelect,
   onCreateInstance,
+  onOpenSettings,
   onToast,
 }: Props) {
   const [showInput, setShowInput] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  const activeCount = instanceNames.filter((n) => isBotActive(n)).length;
 
   const handleCreate = async () => {
     if (!newName.trim()) return onToast('Digite um nome para a instância.', 'err');
@@ -38,18 +42,67 @@ export function DeviceGrid({
   };
 
   return (
-    <div className="px-6 py-8">
-      <div className="max-w-5xl mx-auto">
-        {instanceNames.length === 0 && !showInput ? (
-          <div className="text-center py-16">
-            <div className="text-4xl mb-3 opacity-50">📱</div>
-            <p className="text-dark-muted mb-4">Nenhuma instância encontrada</p>
+    <main className="px-4 sm:px-6 py-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Section Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b-2 border-dark-border/80">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="font-pixel text-sm sm:text-base text-dark-text">
+              🌿 Instâncias &amp; Comunicadores da Floresta
+            </h2>
+            <span className="text-[11px] font-pixel px-2.5 py-0.5 bg-dark-card border border-dark-border text-dark-muted">
+              {instanceNames.length} TOTAL • {activeCount} ATIVO(S)
+            </span>
+          </div>
+
+          {!showInput && (
             <button
+              type="button"
               onClick={() => setShowInput(true)}
-              className="px-4 py-2 bg-dark-accent hover:bg-dark-accent-hover text-white text-sm font-semibold rounded-xl transition-all"
+              className="pixel-btn px-3.5 py-2 bg-dark-card hover:bg-dark-card-hover hover:border-dark-accent text-xs font-pixel text-dark-accent flex items-center gap-2 self-start sm:self-auto cursor-pointer"
             >
-              Criar primeira instância
+              <Plus className="w-4 h-4" />
+              <span>NOVA INSTÂNCIA</span>
             </button>
+          )}
+        </div>
+
+        {instanceNames.length === 0 && !showInput ? (
+          <div className="pixel-card p-10 text-center max-w-lg mx-auto my-8 space-y-4">
+            <div className="w-20 h-20 mx-auto pixel-card-wood p-2.5 flex items-center justify-center">
+              <img
+                src="/assets/sprout-bot-icon.png"
+                alt="Sprout Bot"
+                className="w-full h-full object-contain pixel-art"
+              />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-pixel text-sm text-dark-text">
+                NENHUM COMUNICADOR ENCONTRADO NA CLAREIRA
+              </h3>
+              <p className="text-xs text-dark-muted leading-relaxed">
+                Crie sua primeira instância do WhatsApp ou configure a conexão com a Evolution
+                API no Menu de Configurações.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowInput(true)}
+                className="pixel-btn px-4 py-2.5 bg-dark-accent hover:bg-dark-accent-hover text-dark-bg font-pixel text-xs flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                CRIAR PRIMEIRA INSTÂNCIA
+              </button>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="pixel-btn px-4 py-2.5 bg-dark-input-bg hover:border-dark-accent text-dark-text font-pixel text-xs flex items-center gap-2 cursor-pointer"
+              >
+                <Settings className="w-4 h-4 text-sun-gold" />
+                ABRIR CONFIGURAÇÕES
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -63,47 +116,58 @@ export function DeviceGrid({
               />
             ))}
 
-            {/* Add new instance button */}
+            {/* Add new instance card */}
             {showInput ? (
-              <div className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-dashed border-dark-accent/40 bg-dark-accent/5">
+              <div className="pixel-card-wood p-4 flex flex-col items-center justify-center gap-3">
+                <span className="font-pixel text-[11px] text-sun-gold">
+                  NOVO COMUNICADOR
+                </span>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                   autoFocus
-                  placeholder="Nome..."
-                  className="w-full px-3 py-1.5 bg-dark-input-bg border border-dark-border rounded-lg text-sm text-dark-text text-center focus:outline-none focus:ring-2 focus:ring-dark-accent/50"
+                  placeholder="Nome da instância..."
+                  className="w-full px-3 py-2 pixel-input text-xs text-dark-text text-center"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full">
                   <button
+                    type="button"
                     onClick={handleCreate}
                     disabled={creating}
-                    className="px-3 py-1 bg-dark-accent text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                    className="pixel-btn flex-1 py-1.5 bg-dark-accent text-dark-bg font-pixel text-[11px] flex items-center justify-center disabled:opacity-50 cursor-pointer"
                   >
-                    {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Criar'}
+                    {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'CRIAR'}
                   </button>
                   <button
-                    onClick={() => { setShowInput(false); setNewName(''); }}
-                    className="px-3 py-1 text-dark-muted text-xs rounded-lg hover:text-dark-text"
+                    type="button"
+                    onClick={() => {
+                      setShowInput(false);
+                      setNewName('');
+                    }}
+                    className="pixel-btn px-2.5 py-1.5 bg-dark-input-bg text-dark-muted hover:text-dark-text font-pixel text-[10px] cursor-pointer"
                   >
-                    Cancelar
+                    X
                   </button>
                 </div>
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => setShowInput(true)}
-                className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border border-dashed border-dark-border hover:border-dark-accent/40 hover:bg-dark-accent/5 transition-all cursor-pointer"
+                className="flex flex-col items-center justify-center gap-3 p-5 border-2 border-dashed border-dark-border hover:border-dark-accent bg-dark-card/40 hover:bg-dark-card-hover transition-all cursor-pointer group"
               >
-                <div className="w-14 h-14 rounded-2xl bg-dark-input-bg flex items-center justify-center">
-                  <Plus className="w-6 h-6 text-dark-muted" />
+                <div className="w-16 h-16 bg-dark-input-bg border-2 border-dark-border group-hover:border-dark-accent flex items-center justify-center transition-colors">
+                  <Plus className="w-6 h-6 text-dark-muted group-hover:text-dark-accent" />
                 </div>
-                <span className="text-xs text-dark-muted">Nova instância</span>
+                <span className="font-pixel text-xs text-dark-muted group-hover:text-dark-text">
+                  + NOVA INSTÂNCIA
+                </span>
               </button>
             )}
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }
