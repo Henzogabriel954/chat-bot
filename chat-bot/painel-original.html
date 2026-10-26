@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel Evolution API</title>
+<style>
+:root{--bg:#eef1ec;--card:#fff;--ink:#16211b;--mut:#5d6b62;--line:#d5dcd3;--acc:#1f7a5a;--bad:#b3392f}
+@media(prefers-color-scheme:dark){:root{--bg:#121a16;--card:#1b2620;--ink:#e6eee8;--mut:#93a39a;--line:#2d3b33;--acc:#3fb88a;--bad:#e5766c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.6rem;margin:0 0 4px}h2{font-size:1.05rem;margin:0 0 12px}
+p.sub{color:var(--mut);margin:0 0 20px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+label{display:block;font-size:.85rem;color:var(--mut);margin:10px 0 4px}
+input,textarea,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{min-height:80px;resize:vertical}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row>*{flex:1 1 200px}
+button{padding:9px 14px;border:0;border-radius:6px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.bad{background:var(--bad)}
+button:disabled{opacity:.5;cursor:wait}
+.inst{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.inst:first-child{border-top:0}.inst .n{flex:1 1 160px;font-weight:600}.inst .n small{display:block;color:var(--mut);font-weight:400}
+.st{font-size:.8rem;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
+.st.open{color:var(--acc);border-color:var(--acc)}.st.close{color:var(--bad);border-color:var(--bad)}
+.qr{text-align:center;margin-top:12px}.qr img{max-width:260px;width:100%;background:#fff;padding:8px;border-radius:8px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;overflow:auto;font-size:.8rem;max-height:240px;margin:12px 0 0}
+#msg{position:sticky;top:8px;z-index:5;margin-bottom:12px;padding:10px 12px;border-radius:8px;display:none;font-size:.9rem}
+#msg.ok{display:block;background:var(--acc);color:#fff}#msg.err{display:block;background:var(--bad);color:#fff}
+.empty{color:var(--mut)}
+.bot{border-top:1px solid var(--line);padding:6px 0 12px}.bot:first-child{border-top:0}
+</style>
+</head>
+<body>
+<main>
+<h1>Painel Evolution API</h1>
+<p class="sub">Crie instâncias, conecte pelo QR Code e envie mensagens de teste.</p>
+<div id="msg" role="status"></div>
+
+<section>
+  <h2>Conexão com a API</h2>
+  <div class="row">
+    <div><label for="url">URL da API</label><input id="url" value="http://p2.hcraft.online:8102"></div>
+    <div><label for="key">API Key (AUTHENTICATION_API_KEY)</label><input id="key" type="password" autocomplete="off"></div>
+    <div style="flex:0 0 auto"><button id="save">Salvar e listar</button></div>
+  </div>
+</section>
+
+<section>
+  <h2>Instâncias</h2>
+  <div id="list" class="empty">Informe a API Key e clique em "Salvar e listar".</div>
+  <div class="row" style="margin-top:14px">
+    <div><label for="newName">Nome da nova instância</label><input id="newName" placeholder="ex.: loja01"></div>
+    <div style="flex:0 0 auto"><button id="create">Criar instância</button></div>
+  </div>
+  <div class="qr" id="qr"></div>
+</section>
+
+<section>
+  <h2>Enviar mensagem de texto</h2>
+  <div class="row">
+    <div><label for="inst">Instância</label><select id="inst"></select></div>
+    <div><label for="num">Número com DDI e DDD</label><input id="num" placeholder="5543999999999" inputmode="numeric"></div>
+  </div>
+  <label for="txt">Mensagem</label>
+  <textarea id="txt">Olá! Teste da Evolution API.</textarea>
+  <p style="margin:12px 0 0"><button id="send">Enviar mensagem</button></p>
+  <pre id="out" hidden></pre>
+</section>
+
+<section>
+  <h2>Bots com Ollama (rodam neste navegador)</h2>
+  <div class="row">
+    <div><label for="oUrl">URL do Ollama (neste computador)</label><input id="oUrl" value="http://localhost:11434"></div>
+    <div><label for="oModel">Modelo</label><select id="oModel"></select></div>
+    <div style="flex:0 0 auto"><button class="alt" id="oLoad">Carregar modelos</button></div>
+  </div>
+  <p class="empty" style="margin:10px 0 0;font-size:.85rem">Cada WhatsApp (instância) tem o seu próprio bot e a sua própria instrução. Deixe esta página aberta enquanto os bots estiverem ativos. Mande /reset no WhatsApp para limpar a memória da conversa.</p>
+  <div class="row" style="margin-top:12px;align-items:center">
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink);margin:0"><input id="aud" type="checkbox" style="width:auto"> Entender áudios (transcrever a voz)</label>
+    <div><label for="wmod">Modelo de voz</label><select id="wmod"><option value="whisper-base">Rápido (base)</option><option value="whisper-small">Melhor (small)</option></select></div>
+  </div>
+  <div id="bots" style="margin-top:8px"></div>
+  <pre id="blog" hidden></pre>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const store={get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+$('url').value=store.get('evo_url')||$('url').value;
+$('key').value=store.get('evo_key');
+let names=[];
+
+function toast(t,type){const m=$('msg');m.textContent=t;m.className=type;clearTimeout(toast.t);toast.t=setTimeout(()=>m.className='',5000)}
+
+async function api(path,method='GET',body){
+  const base=$('url').value.trim().replace(/\/+$/,'');
+  const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',apikey:$('key').value.trim()},body:body?JSON.stringify(body):undefined});
+  let d;try{d=await r.json()}catch(e){d=null}
+  if(!r.ok)throw new Error((d&&(d.response&&d.response.message||d.message||d.error))?JSON.stringify(d.response?.message||d.message||d.error):'Erro HTTP '+r.status);
+  return d;
+}
+const guard=(btn,fn)=>async()=>{btn.disabled=true;try{await fn()}catch(e){toast(e.message==='Failed to fetch'?'Não consegui acessar a API. Confira a URL, a porta e se a página não está aberta por HTTPS.':e.message,'err')}finally{btn.disabled=false}};
+
+async function load(){
+  const d=await api('/instance/fetchInstances');
+  names=d.map(i=>i.name||i.instance?.instanceName);
+  window.owners={};d.forEach(i=>{owners[i.name||i.instance?.instanceName]=String(i.ownerJid||i.number||'').split('@')[0].replace(/\D/g,'')});
+  $('inst').innerHTML=names.map(n=>`<option>${n}</option>`).join('');
+  $('list').className=names.length?'':'empty';
+  $('list').innerHTML=names.length?d.map(i=>{
+    const n=i.name||i.instance?.instanceName,s=i.connectionStatus||i.instance?.status||'?';
+    return `<div class="inst"><div class="n">${n}<small>${i.ownerJid||i.number||'sem número vinculado'}</small></div>
+    <span class="st ${s}">${s==='open'?'conectada':s==='close'?'desconectada':s}</span>
+    <button class="alt" data-a="qr" data-n="${n}">Gerar QR Code</button>
+    <button class="alt" data-a="out" data-n="${n}">Desconectar</button>
+    <button class="bad" data-a="del" data-n="${n}">Excluir</button></div>`}).join(''):'Nenhuma instância criada ainda. Crie a primeira abaixo.';
+  renderBots();
+}
+
+$('save').onclick=guard($('save'),async()=>{store.set('evo_url',$('url').value.trim());store.set('evo_key',$('key').value.trim());await load();toast('Conectado. Instâncias atualizadas.','ok')});
+
+$('create').onclick=guard($('create'),async()=>{
+  const n=$('newName').value.trim();if(!n)return toast('Digite um nome para a instância.','err');
+  const d=await api('/instance/create','POST',{instanceName:n,qrcode:true,integration:'WHATSAPP-BAILEYS'});
+  showQR(d.qrcode);await load();toast('Instância "'+n+'" criada. Escaneie o QR Code.','ok');
+});
+
+function showQR(q){
+  const src=q&&q.base64;
+  $('qr').innerHTML=src?`<img alt="QR Code do WhatsApp" src="${src}"><p class="empty">WhatsApp > Aparelhos conectados > Conectar um aparelho</p>`:'<p class="empty">QR Code ainda não disponível. Clique em "Gerar QR Code" de novo em alguns segundos.</p>';
+}
+
+$('list').onclick=async e=>{
+  const b=e.target.closest('button');if(!b)return;const n=b.dataset.n,a=b.dataset.a;
+  b.disabled=true;
+  try{
+    if(a==='qr'){const d=await api('/instance/connect/'+encodeURIComponent(n));d.state==='open'?toast('Essa instância já está conectada.','ok'):showQR(d)}
+    if(a==='out'){await api('/instance/logout/'+encodeURIComponent(n),'DELETE');toast('Instância desconectada.','ok');await load()}
+    if(a==='del'){if(!confirm('Excluir a instância "'+n+'"? Isso não pode ser desfeito.'))return;await api('/instance/delete/'+encodeURIComponent(n),'DELETE');toast('Instância excluída.','ok');await load()}
+  }catch(err){toast(err.message,'err')}finally{b.disabled=false}
+};
+
+$('send').onclick=guard($('send'),async()=>{
+  const n=$('inst').value,num=$('num').value.replace(/\D/g,''),text=$('txt').value.trim();
+  if(!n)return toast('Crie ou selecione uma instância.','err');
+  if(!num||!text)return toast('Preencha o número e a mensagem.','err');
+  const d=await api('/message/sendText/'+encodeURIComponent(n),'POST',{number:num,text});
+  $('out').hidden=false;$('out').textContent=JSON.stringify(d,null,2);toast('Mensagem enviada.','ok');
+});
+
+/* ===== Bots Ollama (um por instância) ===== */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const v0=store.get('evo_oUrl');if(v0)$('oUrl').value=v0;
+$('oUrl').oninput=()=>store.set('evo_oUrl',$('oUrl').value);
+$('oModel').onchange=()=>store.set('evo_oModel',$('oModel').value);
+const blog=(i,m)=>{const p=$('blog');p.hidden=false;p.textContent+=new Date().toLocaleTimeString()+' ['+i+'] '+m+'\n';p.scrollTop=p.scrollHeight};
+const ollama=()=>$('oUrl').value.trim().replace(/\/+$/,'');
+const DEF_SYS='Você é um assistente prestativo. Responda em português do Brasil, de forma curta e clara.';
+const cfgOf=n=>({num:store.get('evo_n_'+n),any:store.get('evo_a_'+n)==='1',sys:store.get('evo_s_'+n)||DEF_SYS});
+const targets=c=>c.any?[]:brVariants(c.num); // lista vazia = qualquer pessoa
+const bots={};let busy=false,ticker=null;
+$('aud').checked=store.get('evo_aud')==='1';$('aud').onchange=()=>store.set('evo_aud',$('aud').checked?'1':'0');
+$('wmod').value=store.get('evo_wmod')||'whisper-base';$('wmod').onchange=()=>store.set('evo_wmod',$('wmod').value);
+
+// Áudio -> texto (Whisper rodando neste navegador; precisa de internet só para baixar o modelo na 1ª vez)
+let asr=null,asrName='';
+async function getAsr(){
+  const name=$('wmod').value;if(asr&&asrName===name)return asr;
+  blog('voz','Carregando o modelo de voz ('+name+'). Na primeira vez ele baixa, aguarde...');
+  const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+  asr=await pipeline('automatic-speech-recognition','Xenova/'+name);asrName=name;
+  blog('voz','Modelo de voz pronto.');return asr;
+}
+async function transcribe(n,r){
+  const d=await api('/chat/getBase64FromMediaMessage/'+encodeURIComponent(n),'POST',{message:{key:{id:r.key.id}},convertToMp4:false});
+  const b64=String((d&&d.base64)||'').replace(/^data:[^,]*,/,'');
+  if(!b64)throw new Error('Não consegui baixar o áudio pela Evolution.');
+  const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+  const ctx=new AudioContext({sampleRate:16000});
+  let buf;try{buf=await ctx.decodeAudioData(bin.buffer)}catch(e){throw new Error('Este navegador não consegue abrir o formato do áudio. Use o Chrome ou o Firefox.')}finally{ctx.close()}
+  if(buf.duration>180)throw new Error('Áudio muito longo (máximo de 3 minutos).');
+  const out=await (await getAsr())(buf.getChannelData(0),{language:'portuguese',task:'transcribe',chunk_length_s:30});
+  return String(out.text||'').trim();
+}
+
+$('oLoad').onclick=guard($('oLoad'),async()=>{
+  let r;try{r=await fetch(ollama()+'/api/tags')}catch(e){throw new Error('Não consegui acessar o Ollama. Ele está rodando e com OLLAMA_ORIGINS=* ?')}
+  if(!r.ok)throw new Error('Ollama respondeu HTTP '+r.status);
+  const m=((await r.json()).models||[]).map(x=>x.name);
+  $('oModel').innerHTML=m.map(n=>`<option>${n}</option>`).join('');
+  const s=store.get('evo_oModel');if(s&&m.includes(s))$('oModel').value=s;
+  toast(m.length?m.length+' modelo(s) encontrado(s).':'Nenhum modelo baixado.',m.length?'ok':'err');
+});
+
+function renderBots(){
+  $('bots').innerHTML=names.length?names.map(n=>{const c=cfgOf(n),on=bots[n]&&bots[n].on;
+    return `<div class="bot" data-n="${esc(n)}"><div class="inst"><div class="n">${esc(n)}<small>número da instância: ${(window.owners&&owners[n])||'?'}</small></div><span class="st ${on?'open':'close'}">${on?'ativo':'parado'}</span></div>
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input class="ba" type="checkbox" style="width:auto" ${c.any?'checked':''}> Responder qualquer pessoa que escrever para este WhatsApp</label>
+    <label>Ou atender só este número</label><input class="bn" value="${esc(c.num)}" placeholder="5543999999999" inputmode="numeric" ${c.any?'disabled':''}>
+    <label>Instrução do sistema</label><textarea class="bs">${esc(c.sys)}</textarea>
+    <p style="margin:10px 0 0"><button data-a="tog">${on?'Parar bot':'Iniciar bot'}</button> <button class="alt" data-a="diag">Diagnóstico</button></p></div>`}).join(''):'<p class="empty">Conecte na API para ver as instâncias.</p>';
+}
+$('bots').addEventListener('input',e=>{const c=e.target.closest('.bot');if(!c)return;const n=c.dataset.n;
+  if(e.target.classList.contains('bn'))store.set('evo_n_'+n,e.target.value);
+  if(e.target.classList.contains('ba')){store.set('evo_a_'+n,e.target.checked?'1':'0');c.querySelector('.bn').disabled=e.target.checked}
+  if(e.target.classList.contains('bs'))store.set('evo_s_'+n,e.target.value)});
+$('bots').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const n=b.closest('.bot').dataset.n;b.disabled=true;
+  try{b.dataset.a==='tog'?await toggle(n):await diag(n)}catch(err){toast(err.message==='Failed to fetch'?'Não consegui acessar a API.':err.message,'err')}finally{b.disabled=false}});
+
+// Números BR: põe o 55 se faltar e testa com e sem o nono dígito
+const brVariants=n=>{n=String(n||'').replace(/\D/g,'');if(!n)return[];if(n.length<=11)n='55'+n;const v=[n];
+  if(/^55\d{2}9\d{8}$/.test(n))v.push(n.slice(0,4)+n.slice(5));else if(/^55\d{2}[2-8]\d{7}$/.test(n))v.push(n.slice(0,4)+'9'+n.slice(4));return v};
+const recs=d=>(d&&d.messages&&d.messages.records)||(d&&d.records)||(Array.isArray(d)?d:[]);
+const msgText=r=>{const m=r.message||{};return (m.conversation||(m.extendedTextMessage&&m.extendedTextMessage.text)||'').trim()};
+const query=(inst,w)=>api('/chat/findMessages/'+encodeURIComponent(inst),'POST',{where:w}).then(recs);
+const digits=j=>String(j||'').split('@')[0].replace(/\D/g,'');
+
+async function fetchMsgs(inst,b){
+  let list;
+  if(!b.vs.length)list=await query(inst,{}); // qualquer pessoa
+  else{ // o WhatsApp novo guarda o chat como @lid e o número real em remoteJidAlt
+    const hit=r=>{const k=r.key||{};return [k.remoteJid,k.remoteJidAlt,k.senderPn,r.senderPn].some(j=>j&&b.vs.includes(digits(j)))};
+    const [a,c]=await Promise.all([Promise.all(b.vs.map(n=>query(inst,{key:{remoteJid:n+'@s.whatsapp.net'}}))),query(inst,{})]);
+    list=[...a.flat(),...c.filter(hit)];
+  }
+  const m=new Map();list.forEach(r=>r.key&&m.set(r.key.id,r));
+  return [...m.values()].sort((a,b)=>(a.messageTimestamp||0)-(b.messageTimestamp||0));
+}
+
+async function askOllama(n,h){
+  let r;
+  try{r=await fetch(ollama()+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:$('oModel').value,stream:false,messages:[{role:'system',content:cfgOf(n).sys},...h]})})}
+  catch(e){throw new Error('Não consegui acessar o Ollama em '+ollama())}
+  if(!r.ok)throw new Error('Ollama HTTP '+r.status+': '+(await r.text()).slice(0,150));
+  const a=(((await r.json()).message||{}).content||'').trim();
+  if(!a)throw new Error('Ollama devolveu resposta vazia');
+  return a;
+}
+async function reply(n,b,to,text){
+  const d=await api('/message/sendText/'+encodeURIComponent(n),'POST',{number:to,text});
+  const id=d&&d.key&&d.key.id;if(id)b.sent.add(id);
+}
+
+async function handle(n,b,r){
+  const k=r.key,jid=k.remoteJid||'';
+  let t=msgText(r);const isAud=!t&&$('aud').checked&&!!(r.message&&r.message.audioMessage);
+  if(!t&&!isAud)return;
+  const real=[k.remoteJidAlt,k.senderPn,r.senderPn,jid].find(j=>j&&!String(j).endsWith('@lid'));
+  const contact=real?digits(real):jid;
+  const to=b.self?owners[n]:contact;
+  if(isAud){blog(n,'🎤 transcrevendo áudio de '+contact+'...');t=await transcribe(n,r);
+    if(!t){await reply(n,b,to,'Não consegui entender o áudio. Pode escrever a sua mensagem?');return}
+    blog(n,'🎤 '+t)}
+  if(/^\/(reset|limpar)$/i.test(t)){b.hist.delete(contact);await reply(n,b,to,'Conversa reiniciada.');blog(n,'memória limpa: '+contact);return}
+  blog(n,'← '+contact+': '+t);
+  const h=b.hist.get(contact)||[];h.push({role:'user',content:t});
+  let a;try{a=await askOllama(n,h)}catch(e){h.pop();throw e}
+  h.push({role:'assistant',content:a});b.hist.set(contact,h.slice(-20));
+  await reply(n,b,to,a);
+  blog(n,'→ '+a);
+}
+async function tickBot(n,b){
+  for(const r of await fetchMsgs(n,b)){
+    const k=r.key,id=k.id;if(!id||b.seen.has(id))continue;b.seen.add(id);
+    const jid=k.remoteJid||'';
+    if(b.sent.has(id)||jid.endsWith('@g.us')||jid==='status@broadcast')continue;
+    if(k.fromMe&&!b.self)continue;
+    try{await handle(n,b,r)}catch(e){blog(n,'ERRO: '+e.message)}
+  }
+}
+async function tick(){
+  if(busy)return;busy=true;
+  try{for(const [n,b] of Object.entries(bots)){if(b.on){try{await tickBot(n,b)}catch(e){blog(n,'ERRO: '+e.message)}}}}finally{busy=false}
+}
+function startTicker(){
+  if(ticker)return;
+  try{const w=new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(1),4000)'])));w.onmessage=tick;ticker=w}
+  catch(e){const t=setInterval(tick,4000);ticker={terminate:()=>clearInterval(t)}}
+}
+async function toggle(n){
+  const cur=bots[n];
+  if(cur&&cur.on){cur.on=false;blog(n,'Bot parado.');if(!Object.values(bots).some(x=>x.on)&&ticker){ticker.terminate();ticker=null}return renderBots()}
+  if(!$('oModel').value)throw new Error('Clique em "Carregar modelos" e escolha um.');
+  const c=cfgOf(n),vs=targets(c);
+  if(!c.any&&!vs.length)throw new Error('Digite o número que o bot vai atender ou marque "Responder qualquer pessoa".');
+  const b={on:false,vs,seen:new Set(),sent:new Set(),hist:new Map(),self:vs.includes((window.owners||{})[n])};
+  bots[n]=b;
+  (await fetchMsgs(n,b)).forEach(r=>r.key&&b.seen.add(r.key.id)); // ignora o histórico antigo
+  b.on=true;
+  blog(n,'Bot ativo: '+(vs.length?'atende '+vs[0]+(b.self?' (conversa consigo mesmo)':''):'atende qualquer pessoa')+' | modelo '+$('oModel').value+' | '+b.seen.size+' mensagem(ns) antiga(s) ignorada(s).');
+  startTicker();renderBots();
+}
+async function diag(n){
+  const vs=targets(cfgOf(n));
+  blog(n,'--- DIAGNÓSTICO ---');
+  blog(n,'número da instância: '+((window.owners&&owners[n])||'?')+' | atende: '+(vs.join(', ')||'qualquer pessoa'));
+  for(const v of vs)blog(n,'com filtro '+v+': '+(await query(n,{key:{remoteJid:v+'@s.whatsapp.net'}})).length+' mensagem(ns)');
+  const all=await query(n,{});blog(n,'sem filtro: '+all.length+' mensagem(ns)');
+  all.sort((a,b)=>(b.messageTimestamp||0)-(a.messageTimestamp||0)).slice(0,6).forEach(r=>{const k=r.key||{};
+    blog(n,'  '+k.remoteJid+' | alt='+(k.remoteJidAlt||'-')+' | fromMe='+k.fromMe+' | '+(msgText(r)||'(sem texto)').slice(0,40))});
+  blog(n,'--- FIM ---');
+}
+
+if($('key').value)$('save').click();
+</script>
+</body>
+</html>

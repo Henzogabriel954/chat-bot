@@ -1,0 +1,10 @@
+{
+  "evolutionUrl": "http://SEU_IP_OU_DOMINIO:8102",
+  "evolutionApiKey": "SUA_API_KEY",
+  "ollamaUrl": "http://localhost:11434",
+  "ollamaModel": "",
+  "audioEnabled": true,
+  "whisperUrl": "http://localhost:9000",
+  "whisperModel": "small",
+  "instances": {}
+}

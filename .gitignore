@@ -1,0 +1,15 @@
+# Binários e builds
+server/bot-server
+chat-bot/dist/
+chat-bot/node_modules/
+
+# Configurações e chaves sensíveis
+server/data/config.json
+.env
+.env.*
+*.local
+
+# Logs e arquivos de sistema
+*.log
+.DS_Store
+server/bot-backend
